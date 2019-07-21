@@ -1,0 +1,6 @@
+[package]
+name = "jwt-decode"
+version = "0.1.0"
+authors = ["Brad Osgood <bosgood@gmail.com>"]
+
+[dependencies]
