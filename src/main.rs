@@ -1,18 +1,8 @@
 use std::env;
 use std::process;
-extern crate jsonwebtoken as jwt;
-#[macro_use]
-extern crate serde_derive;
+extern crate base64;
 
-use jwt::dangerous_unsafe_decode;
-
-/// Our claims struct, it needs to derive `Serialize` and/or `Deserialize`
-#[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: String,
-    company: String,
-    exp: usize,
-}
+use base64::decode;
 
 fn main() {
     if env::args().len() != 2 {
@@ -28,18 +18,49 @@ fn main() {
 
     let res = decode_token(&arg);
     match res {
-        Ok(claims) => println!("{}", claims),
+        Ok(raw) => println!("{}", raw),
         Err(err) => {
-            println!("failed to decode token: {}", err);
+            println!("failed to decode token: {:?}", err);
             process::exit(1);
         }
     }
 }
 
+#[derive(Debug)]
+enum DecodeError {
+    StringFormat(String),
+    Base64(base64::DecodeError),
+    StringEncoding(std::string::FromUtf8Error),
+    JSONDecoding(serde_json::error::Error),
+}
+
 // Decodes a token string into its JSON string representation
-fn decode_token(token: &str) -> Result<String, jwt::errors::Error> {
-    let token_data = dangerous_unsafe_decode::<Claims>(&token)?;
-    Ok(format!("{:?}", token_data))
+fn decode_token(token: &str) -> Result<String, DecodeError> {
+    let parts: Vec<&str> = token.split(".").collect();
+    if parts.len() != 3 {
+        return Err(DecodeError::StringFormat(String::from(
+            "expected a well-formed JWT",
+        )));
+    }
+    let header_b64 = parts[0];
+    let claims_b64 = parts[1];
+    let header_data = decode_part(header_b64)?;
+    let claims_data = decode_part(claims_b64)?;
+    Ok(format!("{} {}", header_data, claims_data))
+}
+
+// Decodes an individual JWT component into its JSON representation
+fn decode_part(part_b64: &str) -> Result<serde_json::Value, DecodeError> {
+    match decode(part_b64) {
+        Ok(part) => match String::from_utf8(part) {
+            Ok(decoded) => match serde_json::from_str(&decoded) {
+                Ok(j) => Ok(j),
+                Err(err) => Err(DecodeError::JSONDecoding(err)),
+            },
+            Err(err) => Err(DecodeError::StringEncoding(err)),
+        },
+        Err(err) => Err(DecodeError::Base64(err)),
+    }
 }
 
 fn usage(msg: &str) {
