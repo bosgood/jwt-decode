@@ -1,5 +1,6 @@
 use std::env;
 use std::process;
+use std::io::{self, Read};
 extern crate base64;
 
 use base64::decode;
@@ -15,8 +16,14 @@ fn main() {
         usage("decodes JSON web tokens");
         process::exit(0);
     }
+    
+    let stdin_char = String::from("-");
+    let res = match arg {
+        // Support for piping from stdin
+        stdin_char => decode_token_stdin(),
+        _ => decode_token(&arg),
+    };
 
-    let res = decode_token(&arg);
     match res {
         Ok(raw) => println!("{}", raw),
         Err(err) => {
@@ -32,6 +39,20 @@ enum DecodeError {
     Base64(base64::DecodeError),
     StringEncoding(std::string::FromUtf8Error),
     JSONDecoding(serde_json::error::Error),
+    IoError(std::io::Error),
+}
+
+impl From<io::Error> for DecodeError {
+    fn from(error: io::Error) -> Self {
+        DecodeError::IoError(error)
+    }
+}
+
+// Decodes a token string from stdin
+fn decode_token_stdin() -> Result<String, DecodeError> {
+    let mut buffer = String::new();
+    io::stdin().read_to_string(&mut buffer)?;
+    decode_token(&buffer)
 }
 
 // Decodes a token string into its JSON string representation
