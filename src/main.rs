@@ -17,12 +17,13 @@ fn main() {
         process::exit(0);
     }
     
-    let stdin_char = String::from("-");
-    let res = match arg {
-        // Support for piping from stdin
-        stdin_char => decode_token_stdin(),
-        _ => decode_token(&arg),
-    };
+    let res;
+    // Support for piping from stdin
+    if arg == "-" {
+        res = decode_token_stdin();
+    } else {
+        res = decode_token(&arg);
+    }
 
     match res {
         Ok(raw) => println!("{}", raw),
@@ -60,7 +61,7 @@ fn decode_token(token: &str) -> Result<String, DecodeError> {
     let parts: Vec<&str> = token.split(".").collect();
     if parts.len() != 3 {
         return Err(DecodeError::StringFormat(String::from(
-            "expected a well-formed JWT",
+            format!("expected a well-formed JWT, got: {}", token),
         )));
     }
     let header_b64 = parts[0];
